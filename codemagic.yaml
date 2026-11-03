@@ -1,24 +1,114 @@
 workflows:
-  telegram-ios:
-    name: Telegram iOS (unsigned IPA)
+  telegram-ios-experiment:
+    name: Telegram iOS unsigned IPA experiment
     instance_type: mac_mini_m2
     max_build_duration: 120
     environment:
       xcode: 27.1
     scripts:
       - name: Fetch submodules
-        script: git submodule update --init --recursive
-      - name: Install Metal Toolchain
-        script: xcodebuild -downloadComponent MetalToolchain
-      - name: Build IPA
         script: |
+          set -euo pipefail
+          git submodule update --init --recursive
+
+      - name: Install Metal Toolchain
+        script: |
+          set -euo pipefail
+          xcodebuild -downloadComponent MetalToolchain
+
+      - name: Import fake codesigning certificates
+        script: |
+          set -euo pipefail
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
+
+      - name: Prepare configuration without building (Make.py query)
+        script: |
+          set -euo pipefail
           python3 -u build-system/Make/Make.py \
             --bazelUserRoot="$HOME/bazel-root" \
-            build \
+            query \
             --configurationPath="build-system/appstore-configuration.json" \
             --codesigningInformationPath=build-system/fake-codesigning \
-            --configuration=release_arm64 \
-            --buildNumber=1
+            --queryArgs="kind(ios_application, //Telegram:Telegram)" \
+            2>&1 | tee prepare.log
+
+      - name: Direct Bazel build without extensions and profiles
+        script: |
+          set -euo pipefail
+          BAZEL=$(ls build-input/bazel-*-darwin-arm64 | head -1)
+          echo "Using $BAZEL"
+          "$BAZEL" --output_user_root="$HOME/bazel-root" build Telegram/Telegram \
+            --announce_rc \
+            --features=swift.use_global_module_cache \
+            --verbose_failures \
+            --remote_cache_async \
+            --define=buildNumber=1 \
+            -c opt \
+            --ios_multi_cpus=arm64 \
+            --watchos_cpus=arm64_32 \
+            --apple_generate_dsym \
+            --output_groups=+dsyms \
+            --@rules_rust//rust/settings:lto=fat \
+            --features=swift.opt_uses_wmo \
+            --features=swift.opt_uses_osize \
+            --features=dead_strip \
+            --objc_enable_binary_stripping \
+            --//Telegram:disableExtensions=True \
+            --//Telegram:disableProvisioningProfiles=True \
+            2>&1 | tee build.log
+
+      - name: Verify Bazel output and copy IPA
+        script: |
+          set -euo pipefail
+          IPA=bazel-bin/Telegram/Telegram.ipa
+          if [ ! -f "$IPA" ]; then
+            IPA=$(ls bazel-out/applebin_ios-ios_arm*-opt-ST-*/bin/Telegram/Telegram.ipa 2>/dev/null | head -1 || true)
+          fi
+          if [ -z "${IPA:-}" ] || [ ! -f "$IPA" ]; then
+            echo "No Telegram.ipa found. Contents of bazel-bin/Telegram:"
+            ls -la bazel-bin/Telegram || true
+            exit 1
+          fi
+          echo "IPA: $IPA"
+
+          rm -rf unpacked && mkdir unpacked
+          unzip -q "$IPA" -d unpacked
+          APP=$(ls -d unpacked/Payload/*.app)
+          BIN="$APP/Telegram"
+          echo "== architectures"
+          lipo -archs "$BIN"
+          lipo -archs "$BIN" | grep -q arm64
+
+          echo "== LC_BUILD_VERSION"
+          otool -l "$BIN" | grep -A4 LC_BUILD_VERSION
+          PLATFORM=$(otool -l "$BIN" | awk '/LC_BUILD_VERSION/ {f=1} f && $1=="platform" {print $2; exit}')
+          echo "platform value: $PLATFORM"
+          case "$PLATFORM" in
+            2|IOS) echo "device platform OK" ;;
+            *) echo "NOT a device build: platform=$PLATFORM (7 or IOSSIMULATOR means simulator)"; exit 1 ;;
+          esac
+
+          echo "== extensions"
+          find "$APP" -name "*.appex"
+          echo "== frameworks"
+          if [ -d "$APP/Frameworks" ]; then
+            find "$APP/Frameworks" -maxdepth 1 -name "*.framework"
+          else
+            echo "no Frameworks directory in $APP"
+          fi
+
+          echo "== signature (informational, the build is not failed here)"
+          if codesign -v "$APP" 2>/dev/null; then
+            echo "signature is valid"
+          else
+            echo "signature is missing or invalid; Sideloadly or AltStore re-signs the IPA"
+          fi
+          (codesign -dvv "$APP" 2>&1 || true) | head -10
+
+          cp "$IPA" Telegram-experiment.ipa
+          ls -la Telegram-experiment.ipa
+
     artifacts:
-      - bazel-out/applebin_ios-ios_arm*-opt-ST-*/bin/Telegram/Telegram.ipa
+      - Telegram-experiment.ipa
+      - build.log
+      - prepare.log
