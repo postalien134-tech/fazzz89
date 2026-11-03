@@ -8,6 +8,8 @@ workflows:
     scripts:
       - name: Fetch submodules
         script: git submodule update --init --recursive
+      - name: Install Metal Toolchain
+        script: xcodebuild -downloadComponent MetalToolchain
       - name: Build IPA
         script: |
           python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
