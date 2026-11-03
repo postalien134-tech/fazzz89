@@ -1,0 +1,22 @@
+workflows:
+  telegram-ios:
+    name: Telegram iOS (unsigned IPA)
+    instance_type: mac_mini_m2
+    max_build_duration: 180
+    environment:
+      xcode: 27.1
+    scripts:
+      - name: Fetch submodules
+        script: git submodule update --init --recursive
+      - name: Build IPA
+        script: |
+          python3 build-system/Make/ImportCertificates.py --path build-system/fake-codesigning/certs
+          python3 -u build-system/Make/Make.py \
+            --bazelUserRoot="$HOME/bazel-root" \
+            build \
+            --configurationPath="build-system/appstore-configuration.json" \
+            --codesigningInformationPath=build-system/fake-codesigning \
+            --configuration=release_arm64 \
+            --buildNumber=1
+    artifacts:
+      - bazel-out/applebin_ios-ios_arm*-opt-ST-*/bin/Telegram/Telegram.ipa
