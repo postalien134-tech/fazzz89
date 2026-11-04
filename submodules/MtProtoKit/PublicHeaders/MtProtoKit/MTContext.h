@@ -97,6 +97,10 @@
 @property (nonatomic, strong) id<EncryptionProvider> _Nonnull encryptionProvider;
 @property (nonatomic, strong, readonly) MTApiEnvironment * _Nonnull apiEnvironment;
 @property (nonatomic, readonly) bool isTestingEnvironment;
+
+/// When set, datacenter address sets are limited to the seed addresses: updates from server config,
+/// backup lists and saved state cannot add other addresses (Teamgram build).
+@property (nonatomic, assign) bool pinDatacenterAddressesToSeeds;
 @property (nonatomic, readonly) bool useTempAuthKeys;
 @property (nonatomic) int32_t tempKeyExpiration;
 // Replaces bound temporary keys this process uses before they expire. Off by default; app extensions keep it off.

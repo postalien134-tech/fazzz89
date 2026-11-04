@@ -480,7 +480,7 @@ static void copyKeychainDictionaryKey(NSString * _Nonnull group, NSString * _Non
             if (nGlobalTimeDifference != nil)
                 _globalTimeDifference = [nGlobalTimeDifference doubleValue];
             
-            NSDictionary *datacenterAddressSetById = [keychain dictionaryForKey:@"datacenterAddressSetById" group:@"persistent"];
+            NSDictionary *datacenterAddressSetById = [keychain dictionaryForKey:@"datacenterAddressSetById_teamgram_v1" group:@"persistent"];
             if (datacenterAddressSetById != nil) {
                 _datacenterAddressSetById = [[NSMutableDictionary alloc] initWithDictionary:datacenterAddressSetById];
                 if (MTLogEnabled()) {
@@ -678,10 +678,11 @@ static void copyKeychainDictionaryKey(NSString * _Nonnull group, NSString * _Non
     }];
 }
 
-- (void)updateAddressSetForDatacenterWithId:(NSInteger)datacenterId addressSet:(MTDatacenterAddressSet *)addressSet forceUpdateSchemes:(bool)forceUpdateSchemes
+- (void)updateAddressSetForDatacenterWithId:(NSInteger)datacenterId addressSet:(MTDatacenterAddressSet *)inputAddressSet forceUpdateSchemes:(bool)forceUpdateSchemes
 {
     [[MTContext contextQueue] dispatchOnQueue:^
     {
+        MTDatacenterAddressSet *addressSet = inputAddressSet;
         if (addressSet != nil && datacenterId != 0)
         {
             if (MTLogEnabled()) {
@@ -692,8 +693,21 @@ static void copyKeychainDictionaryKey(NSString * _Nonnull group, NSString * _Non
             
             bool previousAddressSetWasEmpty = ((MTDatacenterAddressSet *)_datacenterAddressSetById[@(datacenterId)]).addressList.count == 0;
             
+            if (self.pinDatacenterAddressesToSeeds) {
+                MTDatacenterAddressSet *seedAddressSet = _datacenterSeedAddressSetById[@(datacenterId)];
+                if (seedAddressSet != nil && seedAddressSet.addressList.count != 0) {
+                    NSMutableArray<MTDatacenterAddress *> *pinnedAddressList = [[NSMutableArray alloc] init];
+                    for (MTDatacenterAddress *address in addressSet.addressList) {
+                        if ([seedAddressSet.addressList containsObject:address]) {
+                            [pinnedAddressList addObject:address];
+                        }
+                    }
+                    addressSet = [[MTDatacenterAddressSet alloc] initWithAddressList:(pinnedAddressList.count != 0 ? pinnedAddressList : seedAddressSet.addressList)];
+                }
+            }
+
             _datacenterAddressSetById[@(datacenterId)] = addressSet;
-            [_keychain setObject:_datacenterAddressSetById forKey:@"datacenterAddressSetById" group:@"persistent"];
+            [_keychain setObject:_datacenterAddressSetById forKey:@"datacenterAddressSetById_teamgram_v1" group:@"persistent"];
             
             NSArray<MTWeakContextChangeListener *> *changeListeners = [[NSArray alloc] initWithArray:_changeListeners];
             
