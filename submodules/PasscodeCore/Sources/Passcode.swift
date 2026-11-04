@@ -14,12 +14,16 @@ public struct PasscodeConfiguration: Equatable, Sendable {
     public let processRole: ProcessRole
     public let biometricKeychainService: String?
     public let keychainScope: String?
+    /// False when the app group container is unavailable (no App Group entitlement, e.g. a
+    /// free Apple ID build). Shared items are then stored without an access group.
+    public let sharedKeychainGroupAvailable: Bool
 
-    public init(appGroupIdentifier: String, processRole: ProcessRole, biometricKeychainService: String? = nil, keychainScope: String? = nil) {
+    public init(appGroupIdentifier: String, processRole: ProcessRole, biometricKeychainService: String? = nil, keychainScope: String? = nil, sharedKeychainGroupAvailable: Bool = true) {
         self.appGroupIdentifier = appGroupIdentifier
         self.processRole = processRole
         self.biometricKeychainService = biometricKeychainService
         self.keychainScope = keychainScope
+        self.sharedKeychainGroupAvailable = sharedKeychainGroupAvailable
     }
 }
 
@@ -76,6 +80,14 @@ public final class PasscodeEnvironment: @unchecked Sendable {
         return configuration.appGroupIdentifier
     }
 
+    /// The access group for non-biometric items, or nil when the app group is not entitled.
+    func sharedKeychainAccessGroup() throws -> String? {
+        self.mutex.lock()
+        defer { self.mutex.unlock() }
+        guard let configuration = self.configuration else { throw PasscodeError.unavailable }
+        return configuration.sharedKeychainGroupAvailable ? configuration.appGroupIdentifier : nil
+    }
+
     func biometricKeychainService() throws -> String {
         self.mutex.lock()
         defer { self.mutex.unlock() }
@@ -124,7 +136,11 @@ final class PasscodeKeychain: PasscodeStorage {
             kSecAttrSynchronizable as String: false
         ]
         #if !os(macOS)
-        query[kSecAttrAccessGroup as String] = try account.hasPrefix("biometric.") ? self.environment.privateAccessGroup() : self.environment.sharedAccessGroup()
+        if account.hasPrefix("biometric.") {
+            query[kSecAttrAccessGroup as String] = try self.environment.privateAccessGroup()
+        } else if let group = try self.environment.sharedKeychainAccessGroup() {
+            query[kSecAttrAccessGroup as String] = group
+        }
         #endif
         return query
     }
