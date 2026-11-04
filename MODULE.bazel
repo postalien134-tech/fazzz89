@@ -207,7 +207,7 @@ local_path_override(
 bazel_dep(name = "rules_apple", repo_name = "build_bazel_rules_apple")
 local_path_override(
     module_name = "rules_apple",
-    path = "./build-system/bazel-rules/rules_apple",
+    path = "./build-system/bazel-rules/rules_apple_experiment",
 )
 
 bazel_dep(name = "rules_swift", repo_name = "build_bazel_rules_swift")
