@@ -29,7 +29,7 @@ workflows:
             query \
             --configurationPath="build-system/appstore-configuration.json" \
             --codesigningInformationPath=build-system/fake-codesigning \
-            --queryArgs="kind(ios_application, //Telegram:Telegram)" \
+            --queryArgs="--//Telegram:disableExtensions=True --//Telegram:disableProvisioningProfiles=True 'kind(ios_application, //Telegram:Telegram)'" \
             2>&1 | tee prepare.log
 
       - name: Direct Bazel build without extensions and profiles
