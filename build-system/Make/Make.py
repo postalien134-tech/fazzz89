@@ -481,8 +481,11 @@ def resolve_configuration(base_path, bazel_command_line: BazelCommandLine, argum
         additional_codesigning_output_path=additional_codesigning_output_path
     )
     if codesigning_data.aps_environment is None:
-        print('Could not find a valid aps-environment entitlement in the provided provisioning profiles')
-        sys.exit(1)
+        # EXPERIMENT (Telegram fork): a custom bundle ID has no provisioning profile, so there is
+        # no aps-environment to read. An empty value builds without the push entitlement
+        # (Telegram/BUILD: aps_fragment is empty when telegram_aps_environment is "").
+        print('No provisioning profile for this bundle ID; building without the aps-environment entitlement')
+        codesigning_data.aps_environment = ''
 
     if bazel_command_line is not None:
         build_configuration.write_to_variables_file(bazel_path=bazel_command_line.bazel, use_xcode_managed_codesigning=codesigning_data.use_xcode_managed_codesigning, aps_environment=codesigning_data.aps_environment, path=configuration_repository_path + '/variables.bzl')
