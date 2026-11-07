@@ -618,13 +618,13 @@ func initializedNetwork(accountId: AccountRecordId, arguments: NetworkInitializa
                     3: ["149.154.175.117"]
                 ]
             } else {
-                // Own Teamgram server (gift-studio / 199.189.254.201), all DCs point to it
+                // Own Teamgram server (45.88.173.37), all DCs point to it
                 seedAddressList = [
-                    1: ["199.189.254.201"],
-                    2: ["199.189.254.201"],
-                    3: ["199.189.254.201"],
-                    4: ["199.189.254.201"],
-                    5: ["199.189.254.201"]
+                    1: ["45.88.173.37"],
+                    2: ["45.88.173.37"],
+                    3: ["45.88.173.37"],
+                    4: ["45.88.173.37"],
+                    5: ["45.88.173.37"]
                 ]
             }
             
